@@ -1,0 +1,222 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* MerakiOS Brand Colors */
+    --meraki-blue: 217 82% 50%;
+    --quantum-purple: 250 100% 65%;
+    --cyan-pulse: 191 100% 50%;
+    --nebula-black: 220 29% 6%;
+    --cloud-white: 213 38% 97%;
+
+    /* Semantic tokens */
+    --background: 220 29% 6%;
+    --foreground: 213 38% 97%;
+
+    --card: 220 25% 10%;
+    --card-foreground: 213 38% 97%;
+
+    --popover: 220 25% 10%;
+    --popover-foreground: 213 38% 97%;
+
+    --primary: 217 82% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 250 100% 65%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 220 20% 15%;
+    --muted-foreground: 213 20% 65%;
+
+    --accent: 191 100% 50%;
+    --accent-foreground: 220 29% 6%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 220 20% 20%;
+    --input: 220 20% 15%;
+    --ring: 217 82% 50%;
+
+    --radius: 0.75rem;
+
+    /* Gradients */
+    --gradient-dark: linear-gradient(135deg, hsl(var(--nebula-black)) 0%, hsl(220 35% 12%) 50%, hsl(217 50% 20%) 100%);
+    --gradient-light: linear-gradient(135deg, hsl(var(--cloud-white)) 0%, hsl(213 30% 95%) 100%);
+    --gradient-primary: linear-gradient(135deg, hsl(var(--meraki-blue)) 0%, hsl(var(--quantum-purple)) 100%);
+    --gradient-glow: linear-gradient(135deg, hsl(var(--cyan-pulse)) 0%, hsl(var(--meraki-blue)) 100%);
+
+    /* Shadows */
+    --shadow-glow: 0 0 40px hsl(var(--meraki-blue) / 0.3);
+    --shadow-cyan: 0 0 30px hsl(var(--cyan-pulse) / 0.4);
+    --shadow-card: 0 25px 50px -12px hsl(var(--nebula-black) / 0.5);
+
+    --sidebar-background: 220 29% 6%;
+    --sidebar-foreground: 213 38% 97%;
+    --sidebar-primary: 217 82% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 20% 15%;
+    --sidebar-accent-foreground: 213 38% 97%;
+    --sidebar-border: 220 20% 20%;
+    --sidebar-ring: 217 82% 50%;
+  }
+
+  .light-panel {
+    --background: 213 38% 97%;
+    --foreground: 220 29% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 29% 10%;
+    --muted: 213 30% 92%;
+    --muted-foreground: 220 20% 40%;
+    --border: 213 30% 88%;
+    --input: 213 30% 92%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', sans-serif;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: 'Space Grotesk', sans-serif;
+  }
+}
+
+@layer utilities {
+  .gradient-dark {
+    background: var(--gradient-dark);
+  }
+
+  .gradient-light {
+    background: var(--gradient-light);
+  }
+
+  .gradient-primary {
+    background: var(--gradient-primary);
+  }
+
+  .gradient-glow {
+    background: var(--gradient-glow);
+  }
+
+  .glow-primary {
+    box-shadow: var(--shadow-glow);
+  }
+
+  .glow-cyan {
+    box-shadow: var(--shadow-cyan);
+  }
+
+  .text-gradient {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, hsl(191 100% 50%) 0%, hsl(217 82% 50%) 50%, hsl(250 100% 65%) 100%);
+  }
+}
+
+/* Animations */
+@keyframes float {
+
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes pulse-glow {
+
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes node-pulse {
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+
+  50% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+}
+
+@keyframes line-draw {
+  0% {
+    stroke-dashoffset: 1000;
+  }
+
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes fade-in-up {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 3s ease-in-out infinite;
+}
+
+.animate-node-pulse {
+  animation: node-pulse 2s ease-in-out infinite;
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.6s ease-out forwards;
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, transparent, hsl(var(--cyan-pulse) / 0.3), transparent);
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
