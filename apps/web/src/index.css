@@ -1,0 +1,129 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * 1heavy Design System — tokens (HSL sin `hsl()` para permitir opacidad: hsl(var(--x) / 0.5)).
+ * Dark-first. Modo claro con la clase `.light` en <html>.
+ */
+@layer base {
+  :root {
+    /* Paleta de marca */
+    --heavy-blue: 230 98% 61%;   /* #3B5BFD  Heavy Blue — primario / CRM */
+    --heavy-cyan: 188 86% 53%;   /* #22D3EE  Volt Cyan — IA / analítica */
+    --heavy-ember: 37 91% 55%;   /* #F5A524  Ember — gamificación */
+    --heavy-violet: 258 90% 66%; /* #8B5CF6  Signal Violet — marketing / Mautic */
+    --heavy-mint: 160 84% 39%;   /* #10B981  Mint — operación / éxito */
+    --heavy-rose: 350 89% 60%;   /* #F43F5E  Rose — peligro */
+    --heavy-meta: 225 100% 65%;  /* #4F7BFF  Meta Business */
+
+    /* Superficies (dark) */
+    --background: 224 44% 5%;    /* #070A12 ink */
+    --surface: 223 39% 9%;       /* #0E1320 */
+    --elevated: 224 35% 13%;     /* #151B2C */
+    --foreground: 226 100% 97%;  /* #EEF2FF */
+    --muted: 224 35% 13%;
+    --muted-foreground: 223 14% 60%; /* #8B93A7 */
+    --border: 223 29% 19%;       /* #232B40 */
+    --input: 223 29% 19%;
+    --ring: 230 98% 61%;
+
+    --card: 223 39% 9%;
+    --card-foreground: 226 100% 97%;
+    --popover: 224 35% 13%;
+    --popover-foreground: 226 100% 97%;
+    --primary: 230 98% 61%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 224 35% 13%;
+    --secondary-foreground: 226 100% 97%;
+    --accent: 224 35% 16%;
+    --accent-foreground: 226 100% 97%;
+    --destructive: 350 89% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --radius: 0.75rem;
+    color-scheme: dark;
+  }
+
+  .light {
+    /* Acentos más oscuros para contraste AA sobre blanco */
+    --heavy-blue: 230 85% 52%;
+    --heavy-cyan: 190 90% 34%;
+    --heavy-ember: 32 95% 40%;
+    --heavy-violet: 258 70% 52%;
+    --heavy-mint: 160 84% 28%;
+    --heavy-rose: 350 80% 48%;
+    --heavy-meta: 225 85% 50%;
+
+    --background: 228 45% 97%;   /* #F7F8FC */
+    --surface: 0 0% 100%;        /* #FFFFFF */
+    --elevated: 228 40% 95%;
+    --foreground: 226 49% 8%;    /* #0B1020 */
+    --muted: 228 40% 95%;
+    --muted-foreground: 224 14% 38%;
+    --border: 223 33% 92%;       /* #E3E7F1 */
+    --input: 223 33% 88%;
+    --ring: 230 85% 52%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 226 49% 8%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 226 49% 8%;
+    --primary: 230 85% 52%;
+    --secondary: 228 40% 95%;
+    --secondary-foreground: 226 49% 8%;
+    --accent: 228 40% 93%;
+    --accent-foreground: 226 49% 8%;
+    --destructive: 350 80% 48%;
+    color-scheme: light;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-background font-sans text-foreground;
+    font-feature-settings: "cv11", "ss01";
+  }
+
+  h1, h2, h3, h4 {
+    @apply font-display tracking-tight;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer utilities {
+  .text-gradient-heavy {
+    @apply bg-gradient-heavy bg-clip-text text-transparent;
+  }
+  .text-gradient-volt {
+    @apply bg-gradient-volt bg-clip-text text-transparent;
+  }
+  .bg-grid {
+    background-image:
+      linear-gradient(hsl(var(--foreground) / 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--foreground) / 0.04) 1px, transparent 1px);
+    background-size: 44px 44px;
+  }
+  .glass {
+    @apply border border-border/60 bg-surface/70 backdrop-blur-xl;
+  }
+}

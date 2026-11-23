@@ -1,16 +1,37 @@
-# Python
+# ── Python ──
+.venv/
 venv/
 __pycache__/
 *.py[cod]
-.env
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
 
-# NodeJS
+# ── Node ──
 node_modules/
 dist/
-.DS_Store
+coverage/
+*.tsbuildinfo
 
-# MerakiOS Specific
-meraki_local.db
-merakios-core/backend/meraki_db.sqlite
+# ── Entorno y secretos ──
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ── Datos locales ──
+storage/
 *.db
+*.sqlite
 *.log
+
+# ── SO / editores ──
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json

@@ -1,0 +1,55 @@
+name: ✨ Caso de uso / funcionalidad
+description: Proponer un caso de uso nuevo o un cambio a uno existente
+labels: [feature, needs-refinement]
+body:
+  - type: input
+    id: id
+    attributes:
+      label: ID del caso de uso
+      description: Nuevo (CU-XX-NN siguiente libre) o existente
+      placeholder: CU-CRM-11
+    validations: { required: true }
+  - type: dropdown
+    id: module
+    attributes:
+      label: Módulo
+      options: [identity, stays, crm, marketing, meta, growth, gamification, analytics, billing, web, transversal]
+    validations: { required: true }
+  - type: input
+    id: actor
+    attributes:
+      label: Actor
+      placeholder: Marketer / Staff / Sistema (scheduler) ...
+    validations: { required: true }
+  - type: textarea
+    id: story
+    attributes:
+      label: Historia
+      placeholder: Como <actor> quiero <acción> para <beneficio medible>
+    validations: { required: true }
+  - type: textarea
+    id: flow
+    attributes:
+      label: Flujo principal y alternos
+    validations: { required: true }
+  - type: textarea
+    id: rules
+    attributes:
+      label: Reglas de negocio (REG-xx) y criterios de aceptación
+      placeholder: "- Dado ... cuando ... entonces ..."
+    validations: { required: true }
+  - type: textarea
+    id: contract
+    attributes:
+      label: Impacto en API / eventos
+      placeholder: Endpoints nuevos, eventos emitidos/consumidos
+  - type: dropdown
+    id: ready
+    attributes:
+      label: Definition of Ready
+      multiple: true
+      options:
+        - Criterios de aceptación verificables
+        - Diseño/UX disponible (si aplica)
+        - Dependencias externas identificadas
+        - Estimado (≤ 3 días; si no, dividir)

@@ -1,0 +1,142 @@
+# 1heavy — stack local completo.
+#   make up        → todo (db, redis, mautic, evolution, api, web)
+#   make up-deps   → sólo dependencias, para correr api/web en local
+#
+# Puertos: web 8088 · api 8000 · mautic 8081 · evolution 8080 · postgres 5432 · redis 6379
+
+name: oneheavy
+
+x-restart: &restart
+  restart: unless-stopped
+
+services:
+  db:
+    <<: *restart
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    <<: *restart
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    volumes: [redisdata:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── Mautic (marketing automation open source) ──
+  mautic_db:
+    <<: *restart
+    image: mariadb:10.11
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MAUTIC_DB_ROOT_PASSWORD}
+      MARIADB_DATABASE: ${MAUTIC_DB_NAME}
+      MARIADB_USER: ${MAUTIC_DB_USER}
+      MARIADB_PASSWORD: ${MAUTIC_DB_PASSWORD}
+    volumes: [mauticdb:/var/lib/mysql]
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  mautic:
+    <<: *restart
+    image: mautic/mautic:5-apache
+    environment:
+      MAUTIC_DB_HOST: mautic_db
+      MAUTIC_DB_PORT: "3306"
+      MAUTIC_DB_DATABASE: ${MAUTIC_DB_NAME}
+      MAUTIC_DB_USER: ${MAUTIC_DB_USER}
+      MAUTIC_DB_PASSWORD: ${MAUTIC_DB_PASSWORD}
+      DOCKER_MAUTIC_ROLE: mautic_web
+    ports: ["8081:80"]
+    volumes:
+      - mautic_config:/var/www/html/config
+      - mautic_media:/var/www/html/docroot/media
+      - mautic_logs:/var/www/html/var/logs
+    depends_on:
+      mautic_db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 90s
+
+  # ── WhatsApp (cada workspace conecta su número por QR) ──
+  evolution:
+    <<: *restart
+    image: evoapicloud/evolution-api:v2.2.3
+    environment:
+      AUTHENTICATION_TYPE: apikey
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY}
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/evolution?schema=public
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: redis://redis:6379/1
+      CACHE_REDIS_PREFIX_KEY: evolution
+    ports: ["8080:8080"]
+    volumes: [evolution_instances:/evolution/instances]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ── 1heavy ──
+  api:
+    <<: *restart
+    build:
+      context: ../apps/api
+    env_file: .env
+    ports: ["8000:8000"]
+    volumes: [api_storage:/app/storage]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  web:
+    <<: *restart
+    build:
+      context: ../apps/web
+      args:
+        VITE_API_URL: ${VITE_API_URL}
+    ports: ["8088:80"]
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  redisdata:
+  mauticdb:
+  mautic_config:
+  mautic_media:
+  mautic_logs:
+  evolution_instances:
+  api_storage:

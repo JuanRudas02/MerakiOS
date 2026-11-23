@@ -1,0 +1,32 @@
+/** Rutas centralizadas: ninguna navegación usa URLs escritas a mano. */
+export const ROUTES = {
+  PUBLIC: {
+    HOME: "/",
+    PRICING: "/precios",
+    ABOUT: "/nosotros",
+    ACCESS: "/acceso",
+    PRODUCT: (slug: string) => `/producto/${slug}`,
+  },
+  APP: {
+    HOME: "/app",
+    STAYS: "/app/stays",
+    STAYS_PROPERTIES: "/app/stays/propiedades",
+    STAYS_PROPERTY: (id: string) => `/app/stays/propiedades/${id}`,
+    STAYS_TASKS: "/app/stays/tareas",
+    STAYS_TASK: (id: string) => `/app/stays/tareas/${id}`,
+    STAYS_STAFF: "/app/stays/personal",
+    CRM_CONTACTS: "/app/crm/contactos",
+    CRM_PIPELINE: "/app/crm/pipeline",
+    MARKETING: "/app/marketing",
+    META: "/app/meta",
+    GROWTH: "/app/growth",
+    GROWTH_PROJECT: (id: string) => `/app/growth/${id}`,
+    GAMIFICATION: "/app/gamificacion",
+    ANALYTICS: "/app/analitica",
+    SETTINGS_PROFILE: "/app/ajustes/perfil",
+    SETTINGS_TEAM: "/app/ajustes/equipo",
+    SETTINGS_BRAND: "/app/ajustes/marca",
+    SETTINGS_INTEGRATIONS: "/app/ajustes/integraciones",
+    SETTINGS_BILLING: "/app/ajustes/facturacion",
+  },
+} as const;
