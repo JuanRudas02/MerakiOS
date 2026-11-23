@@ -26,7 +26,7 @@ from oneheavy.shared.infrastructure.adapters import LocalFileStorage, NullWebSea
 from oneheavy.shared.infrastructure.config import Settings
 from oneheavy.shared.infrastructure.db import SqlAlchemyUnitOfWork, build_engine, build_session_factory
 from oneheavy.shared.infrastructure.event_bus import InMemoryEventBus
-from oneheavy.shared.infrastructure.llm import FakeLLMClient, OpenAIChatClient
+from oneheavy.shared.infrastructure.llm import AnthropicClaudeClient, FakeLLMClient, OpenAIChatClient
 from oneheavy.shared.infrastructure.messaging import ConsoleMessageSender, EvolutionApiSender
 from oneheavy.shared.infrastructure.security import PasswordHasher, TokenService
 
@@ -53,7 +53,13 @@ class Container:
     def from_settings(cls, settings: Settings, **overrides: Any) -> Container:
         engine = overrides.pop("engine", None) or build_engine(settings.database_url, echo=settings.db_echo)
         llm: LLMClient
-        if settings.llm_provider == "openai" and settings.openai_api_key:
+        if settings.llm_provider == "anthropic" and settings.anthropic_api_key:
+            llm = AnthropicClaudeClient(
+                settings.anthropic_api_key.get_secret_value(),
+                settings.anthropic_model,
+                effort=settings.anthropic_effort,
+            )
+        elif settings.llm_provider == "openai" and settings.openai_api_key:
             llm = OpenAIChatClient(settings.openai_api_key.get_secret_value(), settings.openai_model)
         else:
             llm = FakeLLMClient()

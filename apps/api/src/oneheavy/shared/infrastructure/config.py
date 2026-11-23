@@ -5,7 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, SecretStr
+from pydantic import AliasChoices, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -41,7 +41,12 @@ class Settings(BaseSettings):
     max_upload_mb: int = 10
 
     # IA
-    llm_provider: Literal["fake", "openai"] = "fake"
+    llm_provider: Literal["fake", "anthropic", "openai"] = "fake"
+    anthropic_api_key: SecretStr | None = Field(
+        default=None, validation_alias=AliasChoices("ONEHEAVY_ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY")
+    )
+    anthropic_model: str = "claude-opus-5-5"
+    anthropic_effort: Literal["low", "medium", "high", "xhigh", "max"] = "medium"
     openai_api_key: SecretStr | None = None
     openai_model: str = "gpt-4o-mini"
     tavily_api_key: SecretStr | None = None
