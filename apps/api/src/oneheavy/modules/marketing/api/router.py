@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import hmac
+import json
 import uuid
 from datetime import datetime
 from typing import Any
@@ -292,20 +295,26 @@ async def launch_campaign(
     gateway: MauticGateway = Depends(_gateway),
     c: Container = Depends(get_container),
 ) -> CampaignOut:
-    campaign = await LaunchCampaign(uow, gateway, c.settings.mautic_enabled).execute(
+    campaign = await LaunchCampaign(uow, gateway, c.settings.mautic_enabled, c.llm).execute(
         CampaignRef(principal, campaign_id)
     )
     return CampaignOut.of(campaign)
 
 
-def verify_mautic_secret(container: Container, provided: str | None) -> None:
-    """Comparación en tiempo constante. Sin secreto configurado sólo se acepta en local/test."""
+def verify_mautic_signature(container: Container, body: bytes, signature: str | None) -> None:
+    """Mautic 5 firma cada webhook: `Webhook-Signature = base64(HMAC-SHA256(cuerpo, secreto))`.
+
+    El secreto es el del webhook en Mautic (configurado en ONEHEAVY_MAUTIC_WEBHOOK_SECRET).
+    Se verifica sobre los bytes exactos recibidos, en tiempo constante. Sin secreto
+    configurado sólo se acepta en local/test.
+    """
     secret = container.settings.mautic_webhook_secret
     if secret is None:
         if container.settings.env in ("local", "test"):
             return
         raise AuthenticationError("Webhook de Mautic sin secreto configurado")
-    if not provided or not hmac.compare_digest(provided.encode(), secret.get_secret_value().encode()):
+    expected = base64.b64encode(hmac.new(secret.get_secret_value().encode(), body, hashlib.sha256).digest())
+    if not signature or not hmac.compare_digest(signature.strip().encode(), expected):
         raise AuthenticationError("Firma de webhook inválida")
 
 
@@ -313,13 +322,14 @@ def verify_mautic_secret(container: Container, provided: str | None) -> None:
 async def mautic_webhook(
     request: Request,
     tenant_id: uuid.UUID | None = None,
-    x_mautic_secret: str | None = Header(default=None),
+    webhook_signature: str | None = Header(default=None, alias="Webhook-Signature"),
     uow: SqlMarketingUnitOfWork = Depends(_uow),
     c: Container = Depends(get_container),
 ) -> dict[str, Any]:
-    verify_mautic_secret(c, x_mautic_secret)
+    body = await request.body()
+    verify_mautic_signature(c, body, webhook_signature)
     try:
-        payload = await request.json()
+        payload = json.loads(body)
     except ValueError as exc:
         raise BusinessRuleViolation("Payload JSON inválido", code="invalid_payload") from exc
     if not isinstance(payload, dict):

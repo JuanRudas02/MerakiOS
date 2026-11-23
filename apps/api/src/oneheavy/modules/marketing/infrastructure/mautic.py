@@ -8,12 +8,13 @@ from __future__ import annotations
 
 import itertools
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
 
-from oneheavy.modules.marketing.application.ports import MauticContactData, MauticGateway
+from oneheavy.modules.marketing.application.ports import MauticCampaignEmail, MauticContactData, MauticGateway
 from oneheavy.shared.domain.errors import ExternalServiceError
 
 log = logging.getLogger("oneheavy.marketing.mautic")
@@ -29,6 +30,48 @@ def _contact_payload(data: MauticContactData) -> dict[str, Any]:
         payload["firstname"] = data.first_name
     if data.last_name:
         payload["lastname"] = data.last_name
+    return payload
+
+
+def campaign_payload(
+    name: str, description: str, emails: Sequence[MauticCampaignEmail], segment_id: int | None
+) -> dict[str, Any]:
+    """Campaña de goteo: cada email es un paso raíz cuya espera cuenta desde que el
+    contacto entra a la campaña (día 1 = inmediato, día N = N-1 días después).
+    Incluye el diagrama (canvas) para que se vea bien en el constructor de Mautic."""
+    events: list[dict[str, Any]] = []
+    nodes: list[dict[str, str]] = [
+        {"id": "lists", "positionX": str(140 + 110 * len(emails)), "positionY": "40"}
+    ]
+    connections: list[dict[str, Any]] = []
+    for order, step in enumerate(sorted(emails, key=lambda e: e.day), start=1):
+        ref = f"new{order}"
+        wait = max(step.day - 1, 0)
+        event: dict[str, Any] = {
+            "id": ref,
+            "name": step.name[:190],
+            "type": "email.send",
+            "eventType": "action",
+            "order": order,
+            "properties": {"email": step.email_id, "email_type": "marketing"},
+            "triggerMode": "interval" if wait else "immediate",
+        }
+        if wait:
+            event |= {"triggerInterval": wait, "triggerIntervalUnit": "d"}
+        events.append(event)
+        nodes.append({"id": ref, "positionX": str(40 + 220 * (order - 1)), "positionY": "200"})
+        connections.append(
+            {"sourceId": "lists", "targetId": ref, "anchors": {"source": "leadsource", "target": "top"}}
+        )
+    payload: dict[str, Any] = {
+        "name": name,
+        "description": description,
+        "isPublished": False,
+        "events": events,
+        "canvasSettings": {"nodes": nodes, "connections": connections},
+    }
+    if segment_id:
+        payload["lists"] = [{"id": segment_id}]
     return payload
 
 
@@ -81,7 +124,14 @@ class HttpMauticGateway(MauticGateway):
             await self._request("POST", f"/api/segments/{segment_id}/contact/{cid}/add")
 
     async def create_email(
-        self, *, name: str, subject: str, html: str, text: str, segment_id: int | None = None
+        self,
+        *,
+        name: str,
+        subject: str,
+        html: str,
+        text: str,
+        segment_id: int | None = None,
+        published: bool = False,
     ) -> int:
         payload: dict[str, Any] = {
             "name": name,
@@ -89,17 +139,28 @@ class HttpMauticGateway(MauticGateway):
             "customHtml": html,
             "plainText": text,
             "emailType": "list" if segment_id else "template",
-            "isPublished": False,
+            "isPublished": published,
         }
         if segment_id:
             payload["lists"] = [segment_id]
         return self._id(await self._request("POST", "/api/emails/new", payload), "email")
 
-    async def create_campaign(self, *, name: str, description: str, segment_id: int | None = None) -> int:
-        payload: dict[str, Any] = {"name": name, "description": description, "isPublished": False}
-        if segment_id:
-            payload["lists"] = [{"id": segment_id}]
-        return self._id(await self._request("POST", "/api/campaigns/new", payload), "campaign")
+    async def create_campaign(
+        self,
+        *,
+        name: str,
+        description: str,
+        emails: Sequence[MauticCampaignEmail],
+        segment_id: int | None = None,
+    ) -> int:
+        if not emails:
+            raise ExternalServiceError("Mautic exige al menos un paso en la campaña")
+        return self._id(
+            await self._request(
+                "POST", "/api/campaigns/new", campaign_payload(name, description, emails, segment_id)
+            ),
+            "campaign",
+        )
 
     async def publish_campaign(self, campaign_id: int) -> None:
         await self._request("PATCH", f"/api/campaigns/{campaign_id}/edit", {"isPublished": True})
@@ -142,7 +203,14 @@ class InMemoryMauticGateway(MauticGateway):
         self.segments[segment_id]["contacts"].update(contact_ids)
 
     async def create_email(
-        self, *, name: str, subject: str, html: str, text: str, segment_id: int | None = None
+        self,
+        *,
+        name: str,
+        subject: str,
+        html: str,
+        text: str,
+        segment_id: int | None = None,
+        published: bool = False,
     ) -> int:
         self._check()
         eid = next(self._ids)
@@ -152,17 +220,28 @@ class InMemoryMauticGateway(MauticGateway):
             "html": html,
             "text": text,
             "segment_id": segment_id,
+            "published": published,
         }
         return eid
 
-    async def create_campaign(self, *, name: str, description: str, segment_id: int | None = None) -> int:
+    async def create_campaign(
+        self,
+        *,
+        name: str,
+        description: str,
+        emails: Sequence[MauticCampaignEmail],
+        segment_id: int | None = None,
+    ) -> int:
         self._check()
+        if not emails:
+            raise ExternalServiceError("Mautic exige al menos un paso en la campaña")
         cid = next(self._ids)
         self.campaigns[cid] = {
             "name": name,
             "description": description,
             "segment_id": segment_id,
             "published": False,
+            "payload": campaign_payload(name, description, emails, segment_id),
         }
         return cid
 

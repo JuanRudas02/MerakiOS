@@ -16,14 +16,20 @@ CU-MKT-12  Proyectar contactos del CRM en la audiencia (ContactCreated / Contact
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from oneheavy.modules.marketing.application.ports import MarketingUnitOfWork, MauticContactData, MauticGateway
-from oneheavy.modules.marketing.domain.html import normalize_mautic_tokens
+from oneheavy.modules.marketing.application.ports import (
+    MarketingUnitOfWork,
+    MauticCampaignEmail,
+    MauticContactData,
+    MauticGateway,
+)
+from oneheavy.modules.marketing.domain.html import html_to_text, normalize_mautic_tokens, sanitize_html
 from oneheavy.modules.marketing.domain.model import (
     ENGAGEMENT_POINTS,
     AudienceMember,
@@ -40,6 +46,7 @@ from oneheavy.shared.application.use_case import UseCase
 from oneheavy.shared.domain import integration_events as ie
 from oneheavy.shared.domain.access import Permission, Principal
 from oneheavy.shared.domain.errors import BusinessRuleViolation, DomainError, NotFoundError
+from oneheavy.shared.domain.events import DomainEvent
 
 log = logging.getLogger("oneheavy.marketing")
 
@@ -418,8 +425,18 @@ class CampaignRef:
 
 
 class LaunchCampaign(UseCase[CampaignRef, Campaign]):
-    def __init__(self, uow: MarketingUnitOfWork, gateway: MauticGateway, enabled: bool) -> None:
-        self.uow, self.gateway, self.enabled = uow, gateway, enabled
+    """Lanza la campaña. Con Mautic activo la crea de verdad:
+
+    1. Claude redacta, en paralelo, el email de cada paso de canal email.
+    2. Se crean como emails publicados (plantillas) en Mautic.
+    3. Se crea la campaña con un paso por email en su día y se publica.
+    Los pasos de WhatsApp/anuncios no son de Mautic: quedan en la descripción.
+    """
+
+    def __init__(
+        self, uow: MarketingUnitOfWork, gateway: MauticGateway, enabled: bool, llm: LLMClient | None = None
+    ) -> None:
+        self.uow, self.gateway, self.enabled, self.llm = uow, gateway, enabled, llm
 
     async def execute(self, data: CampaignRef) -> Campaign:
         data.actor.require(Permission.MARKETING_MANAGE)
@@ -427,15 +444,10 @@ class LaunchCampaign(UseCase[CampaignRef, Campaign]):
             campaign = await self.uow.campaigns.get(data.actor.tenant_id, data.campaign_id)
             if campaign is None:
                 raise NotFoundError("Campaña no encontrada")
-            mautic_id: int | None = None
-            if self.enabled:
-                segment_mautic = None
-                if campaign.segment_id:
-                    segment = await self.uow.segments.get(campaign.tenant_id, campaign.segment_id)
-                    segment_mautic = segment.mautic_id if segment else None
-                mautic_id = campaign.mautic_id or await self.gateway.create_campaign(
-                    name=campaign.name, description=campaign.objective, segment_id=segment_mautic
-                )
+            mautic_id = campaign.mautic_id
+            if self.enabled and mautic_id is None:
+                mautic_id = await self._build_in_mautic(campaign)
+            if self.enabled and mautic_id is not None:
                 await self.gateway.publish_campaign(mautic_id)
             campaign.launch(actor_id=data.actor.user_id, mautic_id=mautic_id)
             await self.uow.campaigns.save(campaign)
@@ -443,32 +455,119 @@ class LaunchCampaign(UseCase[CampaignRef, Campaign]):
             await self.uow.commit()
         return campaign
 
+    async def _build_in_mautic(self, campaign: Campaign) -> int:
+        email_steps = [s for s in campaign.steps if s.channel is Channel.EMAIL]
+        if not email_steps:
+            raise BusinessRuleViolation(
+                "Mautic necesita al menos un paso de email en la campaña", code="campaign_without_email"
+            )
+        segment_mautic = None
+        if campaign.segment_id:
+            segment = await self.uow.segments.get(campaign.tenant_id, campaign.segment_id)
+            segment_mautic = segment.mautic_id if segment else None
+        contents = await asyncio.gather(*(self._write(campaign, step) for step in email_steps))
+        mautic_emails = []
+        for step, (subject, html, text) in zip(email_steps, contents, strict=True):
+            email_id = await self.gateway.create_email(
+                name=f"{campaign.name} · día {step.day}",
+                subject=subject,
+                html=html,
+                text=text,
+                published=True,
+            )
+            mautic_emails.append(
+                MauticCampaignEmail(day=step.day, name=f"Día {step.day} · {subject}", email_id=email_id)
+            )
+        others = [
+            f"día {s.day} · {s.channel.value}: {s.subject}"
+            for s in campaign.steps
+            if s.channel is not Channel.EMAIL
+        ]
+        description = campaign.objective + (
+            f"\n\nPasos fuera de Mautic: {'; '.join(others)}" if others else ""
+        )
+        return await self.gateway.create_campaign(
+            name=campaign.name, description=description, emails=mautic_emails, segment_id=segment_mautic
+        )
+
+    async def _write(self, campaign: Campaign, step: CampaignStep) -> tuple[str, str, str]:
+        """Redacta un email del plan; si la IA falla usa una plantilla editable."""
+        if self.llm is not None:
+            prompt = (
+                f"Campaña: {campaign.name}\nObjetivo: {campaign.objective}\n"
+                f"Paso del día {step.day}. Asunto propuesto: {step.subject}\nIntención del email: {step.intent}\n\n"
+                "El email se envía con Mautic: para personalizar usa exactamente {contactfield=firstname} "
+                "y {contactfield=company}.\n"
+                'Devuelve JSON: {"subject": "...", "body_html": "..."}'
+            )
+            try:
+                raw = await self.llm.complete_json(
+                    LLMRequest(
+                        prompt=prompt,
+                        system=EMAIL_SYSTEM_PROMPT,
+                        max_tokens=1500,
+                        metadata={"task": "marketing.campaign_email"},
+                    )
+                )
+                if isinstance(raw, dict) and raw.get("body_html"):
+                    html = sanitize_html(normalize_mautic_tokens(str(raw["body_html"])))
+                    subject = normalize_mautic_tokens(str(raw.get("subject") or step.subject))[:190]
+                    return subject, html, html_to_text(html)
+            except (ValueError, DomainError):
+                log.warning("marketing_campaign_email_fallback", extra={"day": step.day})
+        html = sanitize_html(
+            f"<p>Hola {{contactfield=firstname}},</p><p>{step.intent}</p>"
+            '<p><a href="{unsubscribe_url}">Darme de baja</a></p>'
+        )
+        return step.subject[:190], html, html_to_text(html)
+
 
 # ── CU-MKT-11 Webhook de Mautic ─────────────────────────────────────────────
 
+# Eventos reales de Mautic 5 (verificados contra una instancia real). Mautic no
+# tiene "email_on_click": los clics en emails llegan como page_on_hit con `hit.email`.
 MAUTIC_EVENT_MAP: dict[str, EngagementKind] = {
     "mautic.email_on_open": EngagementKind.EMAIL_OPEN,
-    "mautic.email_on_click": EngagementKind.EMAIL_CLICK,
     "mautic.form_on_submit": EngagementKind.FORM_SUBMIT,
     "mautic.page_on_hit": EngagementKind.PAGE_HIT,
 }
 
 
+def _container(item: dict[str, Any]) -> dict[str, Any]:
+    for key in ("stat", "submission", "hit"):
+        nested = item.get(key)
+        if isinstance(nested, dict):
+            return nested
+    return item
+
+
 def _extract_lead(item: dict[str, Any]) -> dict[str, Any]:
-    for container in ("stat", "submission", "hit"):
-        nested = item.get(container)
-        if isinstance(nested, dict) and isinstance(nested.get("lead"), dict):
-            return dict(nested["lead"])
-    lead = item.get("lead") or item.get("contact")
+    lead = _container(item).get("lead") or item.get("lead") or item.get("contact")
     return dict(lead) if isinstance(lead, dict) else {}
 
 
-def _extract_email(lead: dict[str, Any]) -> str | None:
-    email = lead.get("email")
-    if not email:
-        core = (lead.get("fields") or {}).get("core") or {}
-        email = (core.get("email") or {}).get("value") if isinstance(core, dict) else None
-    return str(email).strip().lower() if email else None
+def _extract_email(item: dict[str, Any], lead: dict[str, Any]) -> str | None:
+    """El email viaja en lugares distintos según el evento (formatos reales de Mautic 5):
+    apertura → stat.emailAddress · formulario → submission.results.email (el contacto
+    puede llegar aún anónimo) · resto → campos del contacto."""
+    box = _container(item)
+    fields = lead.get("fields") or {}
+    core = fields.get("core") if isinstance(fields, dict) else None
+    candidates = [
+        box.get("emailAddress"),
+        (box.get("results") or {}).get("email") if isinstance(box.get("results"), dict) else None,
+        lead.get("email"),
+        ((core or {}).get("email") or {}).get("value") if isinstance(core, dict) else None,
+        (fields.get("all") or {}).get("email") if isinstance(fields, dict) else None,
+    ]
+    email = next((c for c in candidates if isinstance(c, str) and "@" in c), None)
+    return email.strip().lower() if email else None
+
+
+def _kind(event: str, item: dict[str, Any]) -> EngagementKind:
+    if event == "mautic.page_on_hit" and _container(item).get("email"):
+        return EngagementKind.EMAIL_CLICK  # visita que viene de un enlace de email
+    return MAUTIC_EVENT_MAP[event]
 
 
 @dataclass(frozen=True)
@@ -490,36 +589,46 @@ class HandleMauticWebhook(UseCase[MauticWebhookCommand, WebhookResult]):
     async def execute(self, data: MauticWebhookCommand) -> WebhookResult:
         processed = skipped = 0
         async with self.uow:
-            for key, kind in MAUTIC_EVENT_MAP.items():
+            for key in MAUTIC_EVENT_MAP:
                 items = data.payload.get(key) or []
                 for item in [items] if isinstance(items, dict) else items:
                     if not isinstance(item, dict):
                         skipped += 1
                         continue
+                    kind = _kind(key, item)
                     lead = _extract_lead(item)
-                    email = _extract_email(lead)
-                    member = None
-                    if lead.get("id") is not None and str(lead["id"]).isdigit():
-                        member = await self.uow.audience.find_by_mautic_id(int(lead["id"]))
+                    email = _extract_email(item, lead)
+                    lead_id = int(lead["id"]) if str(lead.get("id", "")).isdigit() else None
+                    member = (
+                        await self.uow.audience.find_by_mautic_id(lead_id) if lead_id is not None else None
+                    )
                     if member is None and email and data.tenant_hint:
                         member = await self.uow.audience.find_by_email(data.tenant_hint, email)
                     if member is None:
                         skipped += 1
                         continue
+                    events: list[DomainEvent] = []
+                    if lead_id is not None and member.mautic_id != lead_id:
+                        # Mautic fusiona contactos duplicados y cambia el id: se re-vincula.
+                        member.link_mautic(lead_id)
+                        events.append(
+                            ie.MarketingContactSynced(
+                                tenant_id=member.tenant_id, contact_id=member.contact_id, mautic_id=lead_id
+                            )
+                        )
                     points = ENGAGEMENT_POINTS[kind]
                     member.engage(points)
                     await self.uow.audience.save(member)
-                    self.uow.collect(
-                        [
-                            ie.MarketingEngagementRecorded(
-                                tenant_id=member.tenant_id,
-                                contact_id=member.contact_id,
-                                email=member.email or email,
-                                kind=kind.value,
-                                points=points,
-                            )
-                        ]
+                    events.append(
+                        ie.MarketingEngagementRecorded(
+                            tenant_id=member.tenant_id,
+                            contact_id=member.contact_id,
+                            email=member.email or email,
+                            kind=kind.value,
+                            points=points,
+                        )
                     )
+                    self.uow.collect(events)
                     processed += 1
             await self.uow.commit()
         return WebhookResult(processed, skipped)
