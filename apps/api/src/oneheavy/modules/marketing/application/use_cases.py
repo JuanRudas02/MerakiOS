@@ -23,6 +23,7 @@ from datetime import datetime
 from typing import Any
 
 from oneheavy.modules.marketing.application.ports import MarketingUnitOfWork, MauticContactData, MauticGateway
+from oneheavy.modules.marketing.domain.html import normalize_mautic_tokens
 from oneheavy.modules.marketing.domain.model import (
     ENGAGEMENT_POINTS,
     AudienceMember,
@@ -228,6 +229,8 @@ class GenerateEmail(UseCase[GenerateEmailCommand, EmailDraft]):
                 )
                 + (f"Marca: {data.brand}\n" if data.brand else "")
                 + f"Tono: {data.tone or 'cercano y profesional'}\nIdioma: {data.language}\n\n"
+                "El email se envía con Mautic: para personalizar usa exactamente los tokens "
+                "{contactfield=firstname} y {contactfield=company}; no uses otros marcadores.\n"
                 'Devuelve JSON: {"subject": "...", "preheader": "...", "body_html": "...", "body_text": "..."}'
             )
             draft = await self._generate(prompt, data, tenant)
@@ -249,10 +252,10 @@ class GenerateEmail(UseCase[GenerateEmailCommand, EmailDraft]):
             if isinstance(raw, dict):
                 return EmailDraft.compose(
                     tenant_id=tenant,
-                    subject=str(raw.get("subject") or ""),
-                    preheader=str(raw.get("preheader") or ""),
-                    body_html=str(raw.get("body_html") or ""),
-                    body_text=str(raw.get("body_text") or "") or None,
+                    subject=normalize_mautic_tokens(str(raw.get("subject") or "")),
+                    preheader=normalize_mautic_tokens(str(raw.get("preheader") or "")),
+                    body_html=normalize_mautic_tokens(str(raw.get("body_html") or "")),
+                    body_text=normalize_mautic_tokens(str(raw.get("body_text") or "")) or None,
                     goal=data.goal,
                     segment_id=data.segment_id,
                 )

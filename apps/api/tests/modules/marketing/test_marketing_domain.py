@@ -115,3 +115,16 @@ class TestEmailAndCampaign:
     def test_default_plan_within_duration(self) -> None:
         steps = default_plan("Vender", 10)
         assert steps[0].day == 0 and steps[-1].day == 10 and len(steps) == 5
+
+
+def test_llm_placeholders_become_mautic_tokens() -> None:
+    from oneheavy.modules.marketing.domain.html import normalize_mautic_tokens
+
+    out = normalize_mautic_tokens(
+        "Hola {first_name}, {{ Nombre }} de [Empresa] y {company}. {unsubscribe_url}"
+    )
+    assert out == (
+        "Hola {contactfield=firstname}, {contactfield=firstname} de {contactfield=company} "
+        "y {contactfield=company}. {unsubscribe_url}"
+    )
+    assert normalize_mautic_tokens("{contactfield=firstname}") == "{contactfield=firstname}"

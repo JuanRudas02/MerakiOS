@@ -87,3 +87,26 @@ def html_to_text(raw: str) -> str:
     text = re.sub(r"<[^>]+>", "", text)
     text = html.unescape(text)
     return re.sub(r"\n{3,}", "\n\n", "\n".join(line.strip() for line in text.splitlines())).strip()
+
+
+# Marcadores de personalización que suelen escribir los LLM → tokens de Mautic.
+_MAUTIC_TOKENS = {
+    "firstname": "{contactfield=firstname}",
+    "company": "{contactfield=company}",
+}
+_PLACEHOLDER_RE = re.compile(
+    r"\{\{?\s*(first[_ ]?name|nombre|name|company|empresa)\s*\}?\}|\[(nombre|empresa)\]", re.IGNORECASE
+)
+
+
+def normalize_mautic_tokens(text: str) -> str:
+    """Convierte `{first_name}`, `{{nombre}}`, `[Empresa]`… a los tokens de Mautic.
+
+    No toca tokens propios de Mautic como `{contactfield=...}` o `{unsubscribe_url}`.
+    """
+
+    def _swap(match: re.Match[str]) -> str:
+        word = (match.group(1) or match.group(2) or "").lower()
+        return _MAUTIC_TOKENS["company" if word in ("company", "empresa") else "firstname"]
+
+    return _PLACEHOLDER_RE.sub(_swap, text)
