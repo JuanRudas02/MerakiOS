@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     # Base de datos
     database_url: str = "postgresql+asyncpg://oneheavy:oneheavy@localhost:5432/oneheavy"
     db_echo: bool = False
+    db_pool_size: int = 5  # Supabase (session pooler) limita las conexiones por proyecto
+    db_max_overflow: int = 5
     db_auto_create: bool = True  # sólo local/test; en producción usar migraciones
 
     # Seguridad

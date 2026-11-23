@@ -51,7 +51,12 @@ class Container:
 
     @classmethod
     def from_settings(cls, settings: Settings, **overrides: Any) -> Container:
-        engine = overrides.pop("engine", None) or build_engine(settings.database_url, echo=settings.db_echo)
+        engine = overrides.pop("engine", None) or build_engine(
+            settings.database_url,
+            echo=settings.db_echo,
+            pool_size=settings.db_pool_size,
+            max_overflow=settings.db_max_overflow,
+        )
         llm: LLMClient
         if settings.llm_provider == "anthropic" and settings.anthropic_api_key:
             llm = AnthropicClaudeClient(
