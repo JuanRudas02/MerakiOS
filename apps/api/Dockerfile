@@ -16,5 +16,9 @@ COPY --from=builder /wheels /wheels
 RUN pip install /wheels/* && rm -rf /wheels \
     && mkdir -p /app/storage && chown -R app:app /app
 USER app
+ENV PORT=8000
 EXPOSE 8000
-CMD ["uvicorn", "oneheavy.main:app_factory", "--factory", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
+# Railway/Render inyectan PORT. Se confía en las cabeceras X-Forwarded-* del proxy
+# para obtener la IP real del cliente (necesaria para el rate limiting por IP).
+# Un solo proceso: el scheduler de tareas no debe correr duplicado.
+CMD ["sh", "-c", "exec uvicorn oneheavy.main:app_factory --factory --host 0.0.0.0 --port ${PORT} --proxy-headers --forwarded-allow-ips='*'"]
