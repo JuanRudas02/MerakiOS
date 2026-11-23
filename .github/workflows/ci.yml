@@ -70,7 +70,7 @@ jobs:
               rate = float(ET.parse(p).getroot().get("line-rate", 0)) * 100
               print(f"### Cobertura API: {rate:.1f}%")
           EOF
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: api-coverage
