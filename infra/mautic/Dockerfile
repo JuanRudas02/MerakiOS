@@ -8,6 +8,10 @@ RUN a2dismod -f mpm_event mpm_worker >/dev/null 2>&1 || true \
     && a2enmod mpm_prefork >/dev/null \
     && ls /etc/apache2/mods-enabled/ | grep -c '^mpm_.*\.load$' | grep -qx 1
 
+# Verificación de salud estática: Apache la sirve sin pasar por Mautic (que
+# redirige a https cuando la petición interna del healthcheck llega por http).
+RUN echo ok > /var/www/html/docroot/healthz.txt
+
 COPY railway-entrypoint.sh /railway-entrypoint.sh
 RUN chmod +x /railway-entrypoint.sh
 
