@@ -1,0 +1,41 @@
+name: 🐞 Bug
+description: Algo no funciona como dice el caso de uso
+labels: [bug, triage]
+body:
+  - type: dropdown
+    id: module
+    attributes:
+      label: Módulo
+      options: [identity, stays, crm, marketing, meta, growth, gamification, analytics, billing, web, infra]
+    validations: { required: true }
+  - type: input
+    id: use_case
+    attributes:
+      label: Caso de uso afectado
+      placeholder: CU-ST-04
+  - type: textarea
+    id: steps
+    attributes:
+      label: Pasos para reproducir
+      placeholder: "1. Iniciar sesión como staff\n2. ..."
+    validations: { required: true }
+  - type: textarea
+    id: expected
+    attributes:
+      label: Resultado esperado vs. obtenido
+    validations: { required: true }
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severidad
+      options:
+        - S1 · caída / pérdida de datos / seguridad
+        - S2 · flujo crítico bloqueado sin alternativa
+        - S3 · degradado con alternativa
+        - S4 · cosmético
+    validations: { required: true }
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / evidencia (sin datos personales ni secretos)
+      render: shell
