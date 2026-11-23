@@ -26,7 +26,9 @@ PASSWORD = "Sup3rSecreta2026"
 
 @pytest.fixture
 def settings(tmp_path: Any) -> Settings:
+    # _env_file=None: las pruebas nunca leen el .env local del desarrollador.
     return Settings(
+        _env_file=None,  # type: ignore[call-arg]
         env="test",
         database_url="sqlite+aiosqlite:///:memory:",
         scheduler_enabled=False,
