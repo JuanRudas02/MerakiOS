@@ -35,3 +35,6 @@ storage/
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Caché de Vite
+.vite/
