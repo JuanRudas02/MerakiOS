@@ -40,13 +40,15 @@ class TenantMixin:
     tenant_id: Mapped[uuid.UUID] = mapped_column(Uuid, index=True)
 
 
-def build_engine(url: str, *, echo: bool = False) -> AsyncEngine:
+def build_engine(url: str, *, echo: bool = False, pool_size: int = 5, max_overflow: int = 5) -> AsyncEngine:
     if url.startswith("sqlite"):
         # SQLite en memoria para tests: una sola conexión compartida
         return create_async_engine(
             url, echo=echo, connect_args={"check_same_thread": False}, poolclass=StaticPool
         )
-    return create_async_engine(url, echo=echo, pool_pre_ping=True, pool_size=10, max_overflow=20)
+    return create_async_engine(
+        url, echo=echo, pool_pre_ping=True, pool_size=pool_size, max_overflow=max_overflow, pool_recycle=1800
+    )
 
 
 def build_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
