@@ -1,12 +1,17 @@
+import DOMPurify from "dompurify";
+
 /**
- * Saneamiento mínimo del HTML generado por IA antes de previsualizarlo.
- * La vista previa además corre en un <iframe sandbox=""> (sin scripts ni same-origin),
- * así que esto es defensa en profundidad.
+ * Sanea el HTML generado por IA antes de previsualizarlo.
+ *
+ * Usa DOMPurify (parser real del navegador, no expresiones regulares) con un
+ * perfil sólo-HTML: elimina scripts, iframes, formularios, manejadores `on*` y
+ * URLs `javascript:`. La vista previa además corre en un `<iframe sandbox="">`
+ * y el backend aplica su propio saneamiento: defensa en profundidad.
  */
 export default function sanitizeHtml(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
-    .replace(/<(iframe|object|embed)[\s\S]*?>[\s\S]*?<\/\1>/gi, "")
-    .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
-    .replace(/(href|src)\s*=\s*(["'])\s*javascript:[^"']*\2/gi, '$1="#"');
+  return DOMPurify.sanitize(html, {
+    USE_PROFILES: { html: true },
+    FORBID_TAGS: ["style", "form", "input", "button", "iframe", "object", "embed"],
+    FORBID_ATTR: ["style"],
+  });
 }
